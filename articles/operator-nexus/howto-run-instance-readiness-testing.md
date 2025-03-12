@@ -222,7 +222,7 @@ SERVICE_PRINCIPAL:
 ```
 
 > [!NOTE]
-> If all `SP_ID`,`SP_OBJECT_ID`,`SP_TENANT_ID`,`ADMIN_GROUP_OBJECT_ID`,`KV_NAME`,`KV_ID` are set in the yaml or as an environment variable the script skips creating them.
+> If all `SP_ID`,`SP_OBJECT_ID`,`SP_TENANT_ID`,`ADMIN_GROUP_OBJECT_ID`,`KV_NAME`,`KV_ID` are set in the yaml or as an environment variable the script skips creating them. Please comment them out if you want the script to create and populate the values.
 
 **RESULT:** This script prints values for `ADMIN_GROUP_OBJECT_ID`, `SP_ID`, `SP_OBJECT_ID`, `SP_TENANT`, `KV_NAME`, and `KV_ID`. The script sets the values back to the input yaml.
 See [Input Configuration](#input-configuration).
@@ -259,7 +259,7 @@ UAMI:
 ```
 
 > [!NOTE]
-> If all `UAMI_ID`,`UAMI_RESOURCE_ID`,`UAMI_TENANT_ID` are set in the yaml or as an environment variable the script skips creating them.
+> If all `UAMI_ID`,`UAMI_RESOURCE_ID`,`UAMI_TENANT_ID` are set in the yaml or as an environment variable the script skips creating them. Please comment them out if you want the script to create and populate the values.
 
 **RESULT:** This script prints values for `UAMI_ID`, `UAMI_RESOURCE_ID` and `UAMI_TENANT_ID`. The script sets the values back to the input yaml.
 See [Input Configuration](#input-configuration).
@@ -336,8 +336,8 @@ If you have an existing managed identity and would like the convenience of only 
     # The Object(principal) ID of your Managed Identity for your application
     principalId="00001111-aaaa-2222-bbbb-3333cccc5555"
     # this MUST match the deployment name used above.
-    deploymentName="IRTRoleDefinitionDeployment"
-    deploymentNameCLI="IRTCLIRoleDefinitionDeployment"
+    roleName="Nexus Instance Readiness Tester"
+    roleNameCLI="Nexus Instance Readiness Tester CLI"
    
 
     # This command gets the name of GUID of the role

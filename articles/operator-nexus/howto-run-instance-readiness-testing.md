@@ -132,12 +132,13 @@ For access to the nexus-samples GitHub repository
   * Networks to use for the test are specified in a "networks-blueprint.yml" file, see [Input Configuration](#input-configuration).
 - A way to download the IRT release package, for example, curl, wget, etc.
 - The ability to create a service principal with the correct roles.
+- The ability to create a managed identity with the correct roles.
 - The ability to read secrets from the KeyVault, see [Service Principal](#create-service-principal-and-security-group) section for more details.
 - The ability to create security groups in your Active Directory tenant.
 
 ## Input configuration
 
-Start by building your input file. The IRT tarball provides `irt-input.example.yml` as an example. Download the tarball by following the [instructions](#download-irt). The example values **will not work for your instances**. You need to manually change them and rename the file to `irt-input.yml`. We provide the example input file as a stub to help you configure new input files. The example outlines overridable values and their usage. The **[One Time Setup](#one-time-setup)** assists you in setting input values by writing key/value pairs to the config file as they execute.
+Start by building your input file. The IRT tarball provides `irt-input.example.yml` as an example. Download the tarball by following the [instructions](#download-irt). The placeholder values **will need to be updated with valid values for your instance to work**. You need to manually change them and rename the file to `irt-input.yml`. We provide the example input file as a stub to help you configure new input files. The example outlines overridable values and their usage. The **[One Time Setup](#one-time-setup)** assists you in setting input values by writing key/value pairs to the config file as they execute.
 
 You can provide the network information in a `networks-blueprint.yml` file, similar to the `networks-blueprint.example.yml` that we provide, or append it to the `irt-input.yml` file. The `networks-blueprint.example.yml` defines the schema for IRT. The test creates the networks, so provide network details that aren't in use. Currently, IRT has the following network requirements:
 
@@ -193,7 +194,7 @@ IRT requires a service principal with the correct permissions in order to intera
 
 #### Create service principal and security group
 
-The supplemental script, `create-service-principal.sh` creates a service principal with the custom role `NRT Roles` or associates the role `NRT Roles` to an existing service principal.
+The supplemental script, `create-service-principal.sh` creates a service principal with the custom roles `NRT Roles` and `NRT Roles - NRT CLI` or associates the roles `NRT Roles` nd `NRT Roles - NRT CLI` to an existing service principal.
 
 Additionally, the script creates the necessary security group, and adds the service principal to the security group. If the security group exists, it adds the service principal to the existing security group.
 
@@ -234,10 +235,44 @@ ADMIN_GROUP_OBJECT_ID: "<generated-aad-group-id>"
 KV_NAME: "<provided-key-vault-name>" # If SP already exists please fill it in to retrieve the SP Password.
 KV_ID: "<provided-key-vault-secret>" # If SP already exists please fill it in to retrieve the SP Password.
 ```
+#### Create managed identity and security group
+
+The supplemental script, `create-user-assigned-managed-identity.sh` creates a managed identity with the custom roles `NRT Roles` and `NRT Roles - NRT CLI` or associates the roles `NRT Roles` nd `NRT Roles - NRT CLI` to an existing managed identity.
+
+Executing `create-user-assigned-managed-identity.sh` requires the input yaml to have the following values. All values can be overridden by setting the corresponding environment variables:
+```yml
+UAMI:
+  NAME: "<name>" # env: UAMI_NAME
+  SUBSCRIPTION: "<subscription>" # env: UAMI_SUBSCRIPTION
+  RESOURCE_GROUP: "<resourcegroup" # env: UAMI_RESOURCE_GROUP
+```
+* `UAMI.NAME` - The name of the managed identity, created with the `az identity create` command.
+* `UAMI.SUBSCRIPTION` - The subscription of the managed identity.
+* `UAMI.RESOURCE_GROUP` - The Resource Group where the managed identity is created.
+
+> [!NOTE]
+> Please ensure that you have already created a KeyVault (KV_NAME) and/or a Secret (KV_ID) with a dummy value prior to executing `create-service-principal.sh`. The `az login` user (person executing IRT) should also be granted access to this KeyVault so secrets can be pulled at runtime.
+
+```bash
+# Example execution of the script
+./create-user-assigned-managed-identity.sh irt-input.yml
+```
+
+> [!NOTE]
+> If all `UAMI_ID`,`UAMI_RESOURCE_ID`,`UAMI_TENANT_ID` are set in the yaml or as an environment variable the script skips creating them.
+
+**RESULT:** This script prints values for `UAMI_ID`, `UAMI_RESOURCE_ID` and `UAMI_TENANT_ID`. The script sets the values back to the input yaml.
+See [Input Configuration](#input-configuration).
+
+```yml
+UAMI_ID: "<generated-uami-id>"
+UAMI_RESOURCE_ID: "<generated-uami-resource-id>"
+UAMI_TENANT_ID: "<generated-uami-tenant-id>"
+```
 
 #### Creating a custom role for execution
 
-If you have an existing service principal and would like the convenience of only having to assign one role for IRT execution, you can follow the directions in this section.
+If you have an existing managed identity and would like the convenience of only having to assign the custom roles for IRT execution, you can follow the directions in this section.
 
 ##### Prerequisites
 
@@ -271,8 +306,11 @@ If you have an existing service principal and would like the convenience of only
     # Set our variable values, these values are for the sake of example. Replace these values with your own as needed.
     location="eastus"
     deploymentName="IRTRoleDefinitionDeployment"
-    templatePath="framework-templates/service-principal-roles.jsonc" # Path to the template file assuming the PWD is the root of the artifact tar
+    templatePathSPRole="service-principal-roles.jsonc" # Path to the template file assuming the PWD is the root of the artifact tar
     roleName="Nexus Instance Readiness Tester"
+    deploymentNameCLI="IRTCLIRoleDefinitionDeployment"
+    templatePathCLIRole="service-principal-nrt-cli-roles.jsonc" # Path to the template file assuming the PWD is the root of the artifact tar
+    roleNameCLI="Nexus Instance Readiness Tester CLI"
 
     # run deployment
     az deployment sub create \
@@ -280,20 +318,31 @@ If you have an existing service principal and would like the convenience of only
         --location "$location" \
         --template-file "$templatePath" \
         --parameters roleName="$roleName"
+
+    az deployment sub create \
+        --name "$deploymentNameCLI" \
+        --location "$location" \
+        --template-file "$templatePathCLIRole" \
+        --parameters roleName="$roleNameCLI"
     ```
 
-1. Assign Role to Application Service Principal used for testing
+1. Assign Role to Application Service Principal and Managed Identity used for testing
 
-   Weather created via the all-in-one setup, or using your own, assign the newly created role to your identity. This single role provides all the necessary authorizations to run Instance Readiness Testing.
+   Weather created via the all-in-one setup, or using your own, assign the newly created role to your service principal and managed identity. These two roles provides all the necessary authorizations to run Instance Readiness Testing.
 
    ```bash
     # The Application ID of your Service Principal for your application
     appId="00001111-aaaa-2222-bbbb-3333cccc4444"
+    # The Object(principal) ID of your Managed Identity for your application
+    principalId="00001111-aaaa-2222-bbbb-3333cccc5555"
     # this MUST match the deployment name used above.
     deploymentName="IRTRoleDefinitionDeployment"
+    deploymentNameCLI="IRTCLIRoleDefinitionDeployment"
+   
 
     # This command gets the name of GUID of the role
     # az role definition list --name "$roleName" --query "[0].id" --output tsv | awk -F'/' '{print $NF}'
+    # az role definition list --name "$roleNameCLI" --query "[0].id" --output tsv | awk -F'/' '{print $NF}'
 
     # This command gets the GUID of the subscription
     # az account show --query id --output tsv --only-show-errors
@@ -304,6 +353,25 @@ If you have an existing service principal and would like the convenience of only
       --subscription "$(az account show --query id --output tsv --only-show-errors)" \
       --role "$(az role definition list --name "$roleName" --query "[0].id" --output tsv | awk -F'/' '{print $NF}')" \
       --scope "/subscriptions/$(az account show --query id --output tsv --only-show-errors)"
+
+    az role assignment create \
+      --assignee "$appId" \
+      --subscription "$(az account show --query id --output tsv --only-show-errors)" \
+      --role "$(az role definition list --name "$roleNameCLI" --query "[0].id" --output tsv | awk -F'/' '{print $NF}')" \
+      --scope "/subscriptions/$(az account show --query id --output tsv --only-show-errors)"
+   
+    az role assignment create \
+      --assignee "$principalId" \
+      --subscription "$(az account show --query id --output tsv --only-show-errors)" \
+      --role "$(az role definition list --name "$roleName" --query "[0].id" --output tsv | awk -F'/' '{print $NF}')" \
+      --scope "/subscriptions/$(az account show --query id --output tsv --only-show-errors)"
+
+    az role assignment create \
+      --assignee "$principalId" \
+      --subscription "$(az account show --query id --output tsv --only-show-errors)" \
+      --role "$(az role definition list --name "$roleNameCLI" --query "[0].id" --output tsv | awk -F'/' '{print $NF}')" \
+      --scope "/subscriptions/$(az account show --query id --output tsv --only-show-errors)"
+   ```
 
 #### Create L3 isolation domains
 
